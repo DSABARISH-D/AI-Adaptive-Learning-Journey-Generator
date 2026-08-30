@@ -33,7 +33,7 @@ def _login(monkeypatch: pytest.MonkeyPatch) -> str:
             "sub": "google-123",
         }),
     )
-    response = client.get("/api/auth/google/callback?code=test-code&state=test-state")
+    response = client.get("/api/auth/google/callback?code=test-code&state=test-state&format=json")
     return response.json()["token"]
 
 

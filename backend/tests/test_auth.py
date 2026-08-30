@@ -41,7 +41,7 @@ def _mock_google(monkeypatch: pytest.MonkeyPatch) -> None:
 def _get_token(monkeypatch: pytest.MonkeyPatch) -> str:
     """Log in via the mocked callback and return a JWT."""
     _mock_google(monkeypatch)
-    response = client.get("/api/auth/google/callback?code=test-code&state=test-state")
+    response = client.get("/api/auth/google/callback?code=test-code&state=test-state&format=json")
     assert response.status_code == 200
     return response.json()["token"]
 
@@ -58,11 +58,22 @@ def test_google_login_returns_auth_url() -> None:
 
 def test_google_callback_issues_jwt(monkeypatch: pytest.MonkeyPatch) -> None:
     _mock_google(monkeypatch)
-    response = client.get("/api/auth/google/callback?code=test-code&state=test-state")
+    response = client.get("/api/auth/google/callback?code=test-code&state=test-state&format=json")
     assert response.status_code == 200
     payload = response.json()
     assert "token" in payload
     assert payload["user"]["email"] == "student@example.com"
+
+
+def test_google_callback_redirects(monkeypatch: pytest.MonkeyPatch) -> None:
+    _mock_google(monkeypatch)
+    response = client.get(
+        "/api/auth/google/callback?code=test-code&state=test-state",
+        follow_redirects=False,
+    )
+    assert response.status_code == 307
+    assert "token=" in response.headers["location"]
+    assert "user=" in response.headers["location"]
 
 
 # ── Profile tests ───────────────────────────────────────────────────────────
@@ -75,9 +86,9 @@ def test_profile_requires_auth() -> None:
 def test_profile_crud_success(monkeypatch: pytest.MonkeyPatch) -> None:
     token = _get_token(monkeypatch)
 
-    # GET profile
+    # GET profile before creation
     get_resp = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
-    assert get_resp.status_code == 200
+    assert get_resp.status_code == 404
 
     # PUT profile
     put_resp = client.put(

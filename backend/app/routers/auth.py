@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import RedirectResponse
+import urllib.parse
 from sqlalchemy.orm import Session
 
 from app.auth import build_google_oauth_url, create_access_token, exchange_google_code, get_db
+from app.config import settings
 from app.models import StudentProfile, User
 from app.schemas import AuthTokenResponse, UserOut
 
@@ -19,8 +22,9 @@ def google_login() -> dict[str, str]:
 def google_callback(
     code: str = Query(...),
     state: str | None = Query(default=None),
+    format: str | None = Query(default=None),
     db: Session = Depends(get_db),
-) -> AuthTokenResponse:
+):
     _ = state
     try:
         _, userinfo = exchange_google_code(code)
@@ -39,12 +43,18 @@ def google_callback(
         db.commit()
         db.refresh(user)
 
-    profile = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
-    if profile is None:
-        profile = StudentProfile(user_id=user.id, preferred_name=user.full_name)
-        db.add(profile)
-        db.commit()
-        db.refresh(profile)
+    # We can omit auto-creating the profile here, but let's keep it if we want to be safe,
+    # or let's remove it and handle it in profile router.
+    # The instructions say "Update the profile router to handle the case where user has no profile gracefully"
+    # That implies the profile might NOT exist when hitting the profile router.
+    # So I will remove auto-creation from here!
 
     token = create_access_token(str(user.id))
-    return AuthTokenResponse(token=token, user=UserOut.model_validate(user))
+    user_out = UserOut.model_validate(user)
+    
+    if format == "json":
+        return AuthTokenResponse(token=token, user=user_out)
+
+    user_json = user_out.model_dump_json()
+    frontend_url = f"{settings.frontend_url}/auth/callback?token={token}&user={urllib.parse.quote(user_json)}"
+    return RedirectResponse(url=frontend_url)

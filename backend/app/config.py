@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     google_oauth_client_id: str = "test-client-id"
     google_oauth_client_secret: str = "test-client-secret"
     oauth_redirect_url: str = "http://localhost:8000/api/auth/google/callback"
+    frontend_url: str = "http://localhost:5173"
 
     # AI Providers
     llm_provider: str = "openai"

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_profile, get_current_user, get_db
@@ -10,9 +10,11 @@ router = APIRouter(prefix="/api", tags=["profile"])
 
 @router.get("/profile", response_model=StudentProfileOut)
 def get_profile(
-    profile: StudentProfile = Depends(get_current_profile),
+    profile: StudentProfile | None = Depends(get_current_profile),
     user: User = Depends(get_current_user),
 ) -> StudentProfile:
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
     profile.user_id = user.id
     return profile
 
@@ -20,10 +22,14 @@ def get_profile(
 @router.put("/profile", response_model=StudentProfileOut)
 def update_profile(
     payload: ProfileUpdate,
-    profile: StudentProfile = Depends(get_current_profile),
+    profile: StudentProfile | None = Depends(get_current_profile),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> StudentProfile:
+    if profile is None:
+        profile = StudentProfile(user_id=user.id, preferred_name=user.full_name)
+        db.add(profile)
+
     if payload.preferred_name is not None:
         profile.preferred_name = payload.preferred_name
     if payload.learning_goals is not None:

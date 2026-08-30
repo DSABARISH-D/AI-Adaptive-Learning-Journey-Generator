@@ -78,15 +78,9 @@ def get_current_user(
 def get_current_profile(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> StudentProfile:
-    """Resolve or auto-create a StudentProfile for the authenticated user."""
-    profile = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
-    if profile is None:
-        profile = StudentProfile(user_id=user.id, preferred_name=user.full_name)
-        db.add(profile)
-        db.commit()
-        db.refresh(profile)
-    return profile
+) -> StudentProfile | None:
+    """Resolve the StudentProfile for the authenticated user, or None if it doesn't exist."""
+    return db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
 
 
 def build_google_oauth_url() -> str:
