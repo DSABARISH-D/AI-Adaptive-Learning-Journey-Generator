@@ -84,7 +84,7 @@ export function Courses({ token }: CoursesProps) {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (enrollResponse.ok) {
-        const data = (await response.json()) as Enrollment[]
+        const data = (await enrollResponse.json()) as Enrollment[]
         setEnrollments(data)
       }
 
@@ -102,7 +102,7 @@ export function Courses({ token }: CoursesProps) {
 
   if (selectedCourse) {
     return (
-      <main className="app-shell">
+      <main className="courses-page">
         <section className="panel">
           <button className="back-button" onClick={() => setSelectedCourse(null)}>
             ← Back to courses

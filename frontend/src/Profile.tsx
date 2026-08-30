@@ -3,7 +3,7 @@ import './Profile.css'
 
 interface ProfileProps {
   user: User
-  token: string
+  token?: string
 }
 
 export function Profile({ user }: ProfileProps) {

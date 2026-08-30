@@ -16,8 +16,8 @@ describe('App', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/health', expect.any(Object))
     })
 
-    expect(screen.getByRole('heading', { name: /ai adaptive learning journey generator/i })).toBeInTheDocument()
-    expect(await screen.findByText(/health status: ok/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /your learning journey/i, level: 1 })).toBeInTheDocument()
+    expect(await screen.findByText(/backend: connected/i)).toBeInTheDocument()
 
     vi.unstubAllGlobals()
   })

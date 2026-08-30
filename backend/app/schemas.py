@@ -3,6 +3,18 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
+# ---------------------------------------------------------------------------
+# Error response (consistent shape across the API)
+# ---------------------------------------------------------------------------
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorDetail
+
+
 class UserOut(BaseModel):
     id: int
     email: EmailStr
