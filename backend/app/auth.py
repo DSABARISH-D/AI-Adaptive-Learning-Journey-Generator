@@ -12,7 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import SessionLocal
+from app.database import Base, SessionLocal, engine
 from app.models import StudentProfile, User
 
 security = HTTPBearer(auto_error=False)
@@ -30,6 +30,8 @@ def create_access_token(subject: str) -> str:
 
 def get_db():
     """FastAPI dependency that yields a database session."""
+    if engine.url.get_backend_name() == "sqlite":
+        Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         yield db
