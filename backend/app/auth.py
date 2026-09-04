@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 
 import httpx
 import jwt
@@ -85,12 +86,35 @@ def get_current_profile(
 
 def build_google_oauth_url() -> str:
     """Build the Google OAuth 2.0 authorization redirect URL."""
-    return (
-        "https://accounts.google.com/o/oauth2/v2/auth"
-        f"?client_id={settings.google_oauth_client_id}"
-        f"&redirect_uri={settings.oauth_redirect_url}"
-        "&response_type=code&scope=openid%20email%20profile&access_type=offline"
+    query = urlencode(
+        {
+            "client_id": settings.google_oauth_client_id,
+            "redirect_uri": settings.oauth_redirect_url,
+            "response_type": "code",
+            "scope": "openid email profile",
+            "access_type": "offline",
+        }
     )
+    return f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
+
+
+def google_oauth_error_details(response: httpx.Response) -> tuple[str, str]:
+    """Extract Google's safe-to-log OAuth error fields from an HTTP response."""
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if isinstance(payload, dict):
+        error_code = str(payload.get("error") or "google_oauth_error")
+        description = str(
+            payload.get("error_description")
+            or payload.get("error_uri")
+            or f"Google OAuth request failed with HTTP {response.status_code}."
+        )
+        return error_code, description
+
+    return "google_oauth_error", f"Google OAuth request failed with HTTP {response.status_code}."
 
 
 def exchange_google_code(code: str) -> tuple[dict, dict]:

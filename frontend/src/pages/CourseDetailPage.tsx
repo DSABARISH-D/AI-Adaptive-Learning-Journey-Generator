@@ -7,8 +7,9 @@ import '../styles/Courses.css'
 export function CourseDetailPage() {
   const { code } = useParams<{ code: string }>()
   const [course, setCourse] = useState<CourseDetail | null>(null)
-  const [isEnrolled, setIsEnrolled] = useState(false)
+  const [enrollment, setEnrollment] = useState<Enrollment | null>(null)
   const [loading, setLoading] = useState(true)
+  const [enrolling, setEnrolling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -22,7 +23,7 @@ export function CourseDetailPage() {
           apiFetch<Enrollment[]>('/enrollments').catch(() => [])
         ])
         setCourse(courseData)
-        setIsEnrolled(enrollmentsData.some((e) => e.course_code === code))
+        setEnrollment(enrollmentsData.find((e) => e.course_code === code) ?? null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error')
       } finally {
@@ -36,14 +37,15 @@ export function CourseDetailPage() {
   const handleEnroll = async () => {
     if (!code) return
     try {
-      setLoading(true)
+      setEnrolling(true)
       await apiFetch(`/courses/${code}/enroll`, { method: 'POST' })
-      setIsEnrolled(true)
+      const enrollments = await apiFetch<Enrollment[]>('/enrollments')
+      setEnrollment(enrollments.find((item) => item.course_code === code) ?? null)
       alert(`Successfully enrolled in ${code}!`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
-      setLoading(false)
+      setEnrolling(false)
     }
   }
 
@@ -85,17 +87,43 @@ export function CourseDetailPage() {
         </div>
         
         <div className="mt-8 pt-8 border-t border-gray-100">
-          <button
-            className={`w-full md:w-auto px-8 py-3 rounded-xl font-semibold text-white shadow-sm transition-all ${
-              isEnrolled
-                ? 'bg-green-500 hover:bg-green-600 cursor-default'
-                : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-md'
-            }`}
-            onClick={handleEnroll}
-            disabled={isEnrolled || loading}
-          >
-            {isEnrolled ? '✓ Already Enrolled' : 'Enroll Now'}
-          </button>
+          {/* Enrollment Section */}
+          <section className="bg-gray-800 rounded-xl p-6 border border-gray-700 text-white">
+            <h2 className="text-xl font-bold mb-4">Your Progress</h2>
+            
+            {!enrollment ? (
+              <button 
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium transition-colors"
+                onClick={handleEnroll}
+                disabled={enrolling}
+              >
+                {enrolling ? 'Enrolling...' : 'Enroll in Course'}
+              </button>
+            ) : enrollment.baseline_completed ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-gray-900 rounded-lg">
+                  <span>Baseline Assessment Score</span>
+                  <span className="font-bold text-indigo-400">{enrollment.baseline_score} / 5</span>
+                </div>
+                <Link 
+                  to={`/courses/${code}/journey`}
+                  className="block text-center w-full py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium transition-colors"
+                >
+                  View Learning Journey
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-gray-400">Complete the baseline assessment to personalize your learning journey.</p>
+                <Link 
+                  to={`/courses/${code}/baseline`}
+                  className="block text-center w-full py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium transition-colors"
+                >
+                  Take Baseline Assessment
+                </Link>
+              </div>
+            )}
+          </section>
         </div>
       </div>
     </div>

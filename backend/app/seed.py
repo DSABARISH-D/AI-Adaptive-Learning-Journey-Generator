@@ -13,34 +13,23 @@ def seed_courses() -> None:
         if db.query(Course).count() > 0:
             return
 
-        python_course = Course(
-            code="python",
-            title="Python for Beginners",
-            summary="Build a strong foundation in Python programming.",
-        )
-        db.add(python_course)
-        db.flush()
-        db.add_all(
-            [
-                CourseTopic(course_id=python_course.id, title="Variables and Data Types", description="Learn the basics of Python values and variables.", order=1),
-                CourseTopic(course_id=python_course.id, title="Control Flow", description="Use conditionals and loops to make decisions.", order=2),
-                CourseTopic(course_id=python_course.id, title="Functions", description="Write reusable code with Python functions.", order=3),
-            ]
-        )
-
-        sql_course = Course(
-            code="sql",
-            title="SQL Fundamentals",
-            summary="Query and analyze relational data.",
-        )
-        db.add(sql_course)
-        db.flush()
-        db.add_all(
-            [
-                CourseTopic(course_id=sql_course.id, title="SELECT Queries", description="Understand how data is retrieved from tables.", order=1),
-                CourseTopic(course_id=sql_course.id, title="Joins", description="Combine data from multiple tables.", order=2),
-            ]
-        )
+        catalog = [
+            ("java", "Java Programming", "Build object-oriented programming foundations.", ["Syntax and Types", "Control Flow", "Classes and Objects"]),
+            ("python", "Python Programming", "Build a strong foundation in Python programming.", ["Variables and Data Types", "Control Flow", "Functions"]),
+            ("c", "C Programming", "Understand low-level programming and memory.", ["Syntax and Pointers", "Memory Management", "Data Structures"]),
+            ("cpp", "C++ Programming", "Learn modern C++ and object-oriented design.", ["C++ Basics", "Classes and Objects", "STL Fundamentals"]),
+            ("sql", "SQL Fundamentals", "Query and analyze relational data.", ["SELECT Queries", "Joins", "Aggregation"]),
+        ]
+        for code, title, summary, topics in catalog:
+            course = Course(code=code, title=title, summary=summary)
+            db.add(course)
+            db.flush()
+            db.add_all(
+                [
+                    CourseTopic(course_id=course.id, title=topic, description=f"Practice {topic.lower()} through guided lessons.", order=index)
+                    for index, topic in enumerate(topics, start=1)
+                ]
+            )
 
         db.commit()
     finally:

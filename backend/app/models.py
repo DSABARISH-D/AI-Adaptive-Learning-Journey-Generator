@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -71,9 +71,12 @@ class Enrollment(Base):
     course_id = Column(ForeignKey("courses.id"), nullable=False)
     status = Column(String, default="active", nullable=False)
     enrolled_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    baseline_score = Column(Integer, nullable=True)
+    baseline_completed = Column(Boolean, default=False, nullable=False)
 
     user = relationship("User", back_populates="enrollments")
     course = relationship("Course", back_populates="enrollments")
+    baseline_quizzes = relationship("BaselineQuiz", back_populates="enrollment", cascade="all, delete-orphan")
 
     __table_args__ = (UniqueConstraint("user_id", "course_id", name="uq_enrollment_user_course"),)
 
@@ -84,3 +87,14 @@ class Enrollment(Base):
     @property
     def course_title(self) -> str | None:
         return self.course.title if self.course else None
+
+
+class BaselineQuiz(Base):
+    __tablename__ = "baseline_quizzes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    enrollment_id = Column(ForeignKey("enrollments.id"), nullable=False)
+    questions_json = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    enrollment = relationship("Enrollment", back_populates="baseline_quizzes")
