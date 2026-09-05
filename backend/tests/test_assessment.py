@@ -125,3 +125,30 @@ def test_submit_baseline_quiz_success(monkeypatch: pytest.MonkeyPatch):
     assert enrollment.baseline_score == 2
     assert enrollment.baseline_completed is True
     db.close()
+
+
+def test_topic_assessment_updates_progress(monkeypatch: pytest.MonkeyPatch):
+    token = _login(monkeypatch)
+    db = SessionLocal()
+    course = db.query(Course).filter(Course.code == "python").first()
+    user = db.query(User).filter(User.email == "student@example.com").first()
+    enrollment = Enrollment(user_id=user.id, course_id=course.id, baseline_completed=True)
+    db.add(enrollment)
+    db.commit()
+    db.refresh(enrollment)
+    topic = course.topics[0]
+    db.close()
+
+    response = client.get(
+        f"/api/courses/{course.code}/topics/{topic.id}/assessment",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    quiz = response.json()
+    submit = client.post(
+        f"/api/courses/{course.code}/topics/{topic.id}/assessment",
+        json={"quiz_id": quiz["quiz_id"], "answers": [0, 1, 0, 0, 0]},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert submit.status_code == 200
+    assert submit.json() == {"score": 5, "total": 5}

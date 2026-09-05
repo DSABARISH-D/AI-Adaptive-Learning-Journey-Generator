@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, get_db
-from app.models import BaselineQuiz, Course, Enrollment, User
+from app.models import AssessmentAttempt, BaselineQuiz, Course, CourseTopic, Enrollment, LearningActivity, StudentTopicProgress, TopicAssessment, User
 from app.services.llm import get_llm
 
 router = APIRouter(prefix="/api/courses", tags=["assessment"])
@@ -18,6 +19,7 @@ class QuestionOutput(BaseModel):
     text: str
     options: list[str]
     correct_index: int
+    topic: str | None = None
 
 
 class QuizOutput(BaseModel):
@@ -27,6 +29,7 @@ class QuizOutput(BaseModel):
 class QuestionResponse(BaseModel):
     text: str
     options: list[str]
+    topic: str | None = None
 
 
 class QuizResponse(BaseModel):
@@ -42,6 +45,105 @@ class SubmitAnswers(BaseModel):
 class ScoreResponse(BaseModel):
     score: int
     total: int
+
+
+class TopicResult(BaseModel):
+    topic: str
+    score: int | None
+    status: str
+
+
+class AssessmentResultResponse(BaseModel):
+    score: int
+    total: int
+    percentage: int
+    strong_topics: list[TopicResult]
+    medium_topics: list[TopicResult]
+    weak_topics: list[TopicResult]
+
+
+def _topic_questions(topic: CourseTopic) -> dict[str, list[dict[str, object]]]:
+    """Provide a deterministic starter assessment until question generation is enabled."""
+    return {"questions": [
+        {"text": f"Which statement best describes {topic.title}?", "options": [topic.title, "A database table", "A network protocol", "A file format"], "correct_index": 0},
+        {"text": f"What is the first useful step when learning {topic.title}?", "options": ["Memorize everything", "Understand a small example", "Skip practice", "Avoid feedback"], "correct_index": 1},
+        {"text": f"Which approach improves skill with {topic.title}?", "options": ["Repeated practice", "Never reviewing mistakes", "Guessing only", "Removing examples"], "correct_index": 0},
+        {"text": f"When debugging {topic.title}, what should a learner do?", "options": ["Trace the behavior", "Delete the code", "Ignore the output", "Change every line"], "correct_index": 0},
+        {"text": f"How should progress in {topic.title} be checked?", "options": ["With evidence and practice", "Only by confidence", "Without feedback", "By skipping assessment"], "correct_index": 0},
+    ]}
+
+
+def _assign_question_topics(quiz_json: dict[str, list[dict[str, object]]], topics: list[CourseTopic]) -> dict[str, list[dict[str, object]]]:
+    topic_names = [topic.title for topic in topics]
+    for index, question in enumerate(quiz_json.get("questions", [])):
+        question["topic"] = str(question.get("topic") or (topic_names[index % len(topic_names)] if topic_names else "General"))
+    return quiz_json
+
+
+@router.get("/{course_code}/topics/{topic_id}/assessment", response_model=QuizResponse)
+def get_topic_assessment(course_code: str, topic_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> QuizResponse:
+    course = db.scalars(select(Course).where(Course.code == course_code)).first()
+    topic = db.scalars(select(CourseTopic).where(CourseTopic.id == topic_id, CourseTopic.course_id == course.id if course else False)).first()
+    enrollment = db.scalars(select(Enrollment).where(Enrollment.course_id == course.id if course else False, Enrollment.user_id == user.id)).first()
+    if course is None or topic is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Course topic not found"})
+    if enrollment is None:
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Not enrolled in this course"})
+
+    quiz_json = _topic_questions(topic)
+    assessment = TopicAssessment(enrollment_id=enrollment.id, topic_id=topic.id, questions_json=quiz_json)
+    db.add(assessment)
+    db.commit()
+    db.refresh(assessment)
+    return QuizResponse(quiz_id=assessment.id, questions=[QuestionResponse(text=item["text"], options=item["options"], topic=str(item.get("topic") or topic.title)) for item in quiz_json["questions"]])
+
+
+@router.post("/{course_code}/topics/{topic_id}/assessment", response_model=ScoreResponse)
+def submit_topic_assessment(course_code: str, topic_id: int, payload: SubmitAnswers, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> ScoreResponse:
+    course = db.scalars(select(Course).where(Course.code == course_code)).first()
+    enrollment = db.scalars(select(Enrollment).where(Enrollment.course_id == course.id if course else False, Enrollment.user_id == user.id)).first()
+    assessment = db.scalars(select(TopicAssessment).where(TopicAssessment.id == payload.quiz_id, TopicAssessment.topic_id == topic_id, TopicAssessment.enrollment_id == enrollment.id if enrollment else False)).first()
+    if course is None or enrollment is None or assessment is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Topic assessment not found"})
+    questions = assessment.questions_json.get("questions", [])
+    if len(payload.answers) != len(questions):
+        raise HTTPException(status_code=400, detail={"code": "BAD_REQUEST", "message": "Incorrect number of answers"})
+
+    score = sum(answer == question["correct_index"] for answer, question in zip(payload.answers, questions))
+    percentage = round(score / len(questions) * 100) if questions else 0
+    progress = db.scalars(select(StudentTopicProgress).where(StudentTopicProgress.enrollment_id == enrollment.id, StudentTopicProgress.topic_id == topic_id)).first()
+    if progress is None:
+        progress = StudentTopicProgress(user_id=user.id, enrollment_id=enrollment.id, topic_id=topic_id)
+    progress.score = percentage
+    progress.status = "mastered" if percentage >= 80 else "completed" if percentage >= 70 else "needs_practice" if percentage >= 50 else "weak"
+    if progress.status in {"mastered", "completed"}:
+        progress.completed_at = progress.completed_at or datetime.utcnow()
+    db.add(progress)
+    db.add(AssessmentAttempt(user_id=user.id, enrollment_id=enrollment.id, assessment_type="topic", score=score, total=len(questions)))
+    db.add(LearningActivity(user_id=user.id, enrollment_id=enrollment.id, activity_type="topic_assessment", title=f"Completed {assessment.topic.title} assessment", score=percentage, minutes=10))
+    db.commit()
+    return ScoreResponse(score=score, total=len(questions))
+
+
+@router.get("/{course_code}/baseline/{quiz_id}/result", response_model=AssessmentResultResponse)
+def get_baseline_result(course_code: str, quiz_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> AssessmentResultResponse:
+    course = db.scalars(select(Course).where(Course.code == course_code)).first()
+    enrollment = db.scalars(select(Enrollment).where(Enrollment.course_id == course.id if course else False, Enrollment.user_id == user.id)).first()
+    quiz = db.scalars(select(BaselineQuiz).where(BaselineQuiz.id == quiz_id, BaselineQuiz.enrollment_id == enrollment.id if enrollment else False)).first()
+    attempt = db.scalars(select(AssessmentAttempt).where(AssessmentAttempt.enrollment_id == enrollment.id if enrollment else False, AssessmentAttempt.assessment_type == "baseline").order_by(AssessmentAttempt.created_at.desc())).first()
+    if course is None or enrollment is None or quiz is None or attempt is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Assessment result not found"})
+
+    progress_rows = db.scalars(select(StudentTopicProgress).where(StudentTopicProgress.enrollment_id == enrollment.id)).all()
+    results = [TopicResult(topic=row.topic.title, score=row.score, status=row.status) for row in progress_rows if row.topic is not None]
+    return AssessmentResultResponse(
+        score=attempt.score,
+        total=attempt.total,
+        percentage=round(attempt.score / attempt.total * 100) if attempt.total else 0,
+        strong_topics=[result for result in results if result.score is not None and result.score >= 70],
+        medium_topics=[result for result in results if result.score is not None and 50 <= result.score < 70],
+        weak_topics=[result for result in results if result.score is not None and result.score < 50],
+    )
 
 
 @router.get("/{course_code}/baseline", response_model=QuizResponse)
@@ -77,7 +179,7 @@ def get_baseline_quiz(
     except Exception as e:
         raise HTTPException(status_code=500, detail={"code": "LLM_ERROR", "message": f"Failed to generate quiz: {str(e)}"})
 
-    quiz_json = result.model_dump()
+    quiz_json = _assign_question_topics(result.model_dump(), db.scalars(select(CourseTopic).where(CourseTopic.course_id == course.id).order_by(CourseTopic.order)).all())
 
     quiz = BaselineQuiz(enrollment_id=enrollment.id, questions_json=quiz_json)
     db.add(quiz)
@@ -85,7 +187,7 @@ def get_baseline_quiz(
     db.refresh(quiz)
 
     questions_no_ans = [
-        QuestionResponse(text=q["text"], options=q["options"])
+        QuestionResponse(text=q["text"], options=q["options"], topic=str(q.get("topic") or "General"))
         for q in quiz_json.get("questions", [])
     ]
 
@@ -128,6 +230,27 @@ def submit_baseline_quiz(
 
     enrollment.baseline_score = score
     enrollment.baseline_completed = True
+    db.add(AssessmentAttempt(user_id=user.id, enrollment_id=enrollment.id, score=score, total=len(questions)))
+
+    topics = db.scalars(select(CourseTopic).where(CourseTopic.course_id == course.id).order_by(CourseTopic.order)).all()
+    topics_by_name = {topic.title: topic for topic in topics}
+    topic_scores: dict[int, list[int]] = {topic.id: [] for topic in topics}
+    for index, answer in enumerate(payload.answers):
+        question_topic = topics_by_name.get(str(questions[index].get("topic", ""))) if topics else None
+        selected_topic = question_topic or (topics[index % len(topics)] if topics else None)
+        if selected_topic:
+            topic_scores[selected_topic.id].append(100 if answer == questions[index]["correct_index"] else 0)
+    for index, topic in enumerate(topics):
+        scores = topic_scores[topic.id]
+        topic_score = round(sum(scores) / len(scores)) if scores else None
+        progress = db.scalars(select(StudentTopicProgress).where(StudentTopicProgress.enrollment_id == enrollment.id, StudentTopicProgress.topic_id == topic.id)).first()
+        if progress is None:
+            progress = StudentTopicProgress(user_id=user.id, enrollment_id=enrollment.id, topic_id=topic.id)
+        progress.score = topic_score
+        progress.status = "completed" if topic_score is not None and topic_score >= 70 else ("in_progress" if index == 0 or topic_score is not None else "upcoming")
+        if progress.status == "completed":
+            progress.completed_at = progress.completed_at or datetime.utcnow()
+        db.add(progress)
     db.commit()
 
     return ScoreResponse(score=score, total=len(questions))

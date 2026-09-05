@@ -98,3 +98,57 @@ class BaselineQuiz(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     enrollment = relationship("Enrollment", back_populates="baseline_quizzes")
+
+
+class TopicAssessment(Base):
+    __tablename__ = "topic_assessments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    enrollment_id = Column(ForeignKey("enrollments.id"), nullable=False)
+    topic_id = Column(ForeignKey("course_topics.id"), nullable=False)
+    questions_json = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    topic = relationship("CourseTopic")
+
+
+class StudentTopicProgress(Base):
+    __tablename__ = "student_topic_progress"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(ForeignKey("users.id"), nullable=False)
+    enrollment_id = Column(ForeignKey("enrollments.id"), nullable=False)
+    topic_id = Column(ForeignKey("course_topics.id"), nullable=False)
+    score = Column(Integer, nullable=True)
+    status = Column(String, default="upcoming", nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    topic = relationship("CourseTopic")
+    __table_args__ = (UniqueConstraint("enrollment_id", "topic_id", name="uq_progress_enrollment_topic"),)
+
+
+class AssessmentAttempt(Base):
+    __tablename__ = "assessment_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(ForeignKey("users.id"), nullable=False)
+    enrollment_id = Column(ForeignKey("enrollments.id"), nullable=False)
+    assessment_type = Column(String, default="baseline", nullable=False)
+    score = Column(Integer, nullable=False)
+    total = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class LearningActivity(Base):
+    __tablename__ = "learning_activities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(ForeignKey("users.id"), nullable=False)
+    enrollment_id = Column(ForeignKey("enrollments.id"), nullable=True)
+    activity_type = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    score = Column(Integer, nullable=True)
+    minutes = Column(Integer, default=0, nullable=False)
+    metadata_json = Column(JSON, nullable=True, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

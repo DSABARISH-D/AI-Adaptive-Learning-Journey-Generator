@@ -5,37 +5,51 @@ export function TopNav() {
   const { user } = useAuth()
 
   return (
-    <header className="top-nav h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm">
-      <div className="flex-1 flex items-center">
-        <div className="relative w-96">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-            🔍
-          </span>
-          <input
-            type="text"
-            placeholder="Search courses, resources..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
-          />
-        </div>
+    <header className="top-nav">
+      {/* Search bar */}
+      <div className="topnav-search">
+        <span className="search-icon" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </span>
+        <input
+          type="text"
+          placeholder="Search for courses, topics, or resources..."
+          id="topnav-search-input"
+        />
+        <kbd className="search-shortcut">Ctrl + K</kbd>
       </div>
-      <div className="nav-actions flex items-center gap-4">
-        <button className="text-gray-500 hover:text-indigo-600 text-xl relative">
-          🔔
-          <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+
+      {/* Right actions */}
+      <div className="topnav-actions">
+        {/* Notifications */}
+        <button aria-label="Notifications" className="topnav-icon-btn" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+          <span className="notif-badge">3</span>
         </button>
+
+        {/* User profile */}
         {user ? (
-          <Link to="/profile" className="flex items-center gap-3 pl-4 border-l border-gray-200">
-            <div className="flex flex-col items-end">
-              <span className="text-sm font-medium text-gray-900">{user.full_name || user.email}</span>
-              <span className="text-xs text-gray-500">Student</span>
-            </div>
+          <Link to="/profile" className="topnav-user">
             {user.avatar_url ? (
-              <img src={user.avatar_url} alt="Avatar" className="w-9 h-9 rounded-full border border-gray-200" />
+              <img src={user.avatar_url} alt="Avatar" className="topnav-avatar" />
             ) : (
-              <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold border border-indigo-200">
+              <div className="topnav-avatar topnav-avatar-placeholder">
                 {(user.full_name || user.email).charAt(0).toUpperCase()}
               </div>
             )}
+            <div className="topnav-user-info">
+              <span className="topnav-user-name">{user.full_name || user.email}</span>
+              <span className="topnav-user-role">CSE Student</span>
+            </div>
+            <svg className="topnav-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </Link>
         ) : null}
       </div>

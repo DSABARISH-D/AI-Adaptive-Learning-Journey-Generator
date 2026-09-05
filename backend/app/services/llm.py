@@ -31,9 +31,13 @@ def get_llm():
     try:
         if settings.llm_provider.lower() == "google":
             from langchain_google_genai import ChatGoogleGenerativeAI
+            if not settings.gemini_api_key:
+                return _LocalLLM()
             return ChatGoogleGenerativeAI(model="gemini-1.5-pro", google_api_key=settings.gemini_api_key, temperature=0.2)
 
         from langchain_openai import ChatOpenAI
+        if not settings.openai_api_key:
+            return _LocalLLM()
         return ChatOpenAI(model="gpt-4o-mini", api_key=settings.openai_api_key, temperature=0.2)
-    except ImportError:
+    except (ImportError, ValueError):
         return _LocalLLM()

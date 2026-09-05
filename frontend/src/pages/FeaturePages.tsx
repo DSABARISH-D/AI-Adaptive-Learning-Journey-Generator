@@ -1,41 +1,73 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { apiFetch } from '../api/client'
 import { recordLearningEvent } from '../services/cloudStore'
-import type { Course } from '../types'
-
-const roadmapTopics = [
-  { title: 'Variables & Operators', state: 'Completed', score: 85 },
-  { title: 'Conditional Statements', state: 'Completed', score: 78 },
-  { title: 'Loops', state: 'In progress', score: 72 },
-  { title: 'Methods', state: 'Upcoming', score: null },
-  { title: 'Object-Oriented Concepts', state: 'Upcoming', score: null },
-]
+import type { CourseDetail, Enrollment, Course } from '../types'
 
 export function JourneyPage() {
+  const { code } = useParams<{ code?: string }>()
+  const [course, setCourse] = useState<CourseDetail | null>(null)
+  const [enrollment, setEnrollment] = useState<Enrollment | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function loadJourney() {
+      try {
+        const enrollments = await apiFetch<Enrollment[]>('/enrollments')
+        const selected = code ? enrollments.find((item) => item.course_code === code) : enrollments[0]
+        if (!selected?.course_code) {
+          setLoading(false)
+          return
+        }
+        const courseData = await apiFetch<CourseDetail>(`/courses/${selected.course_code}`)
+        setCourse(courseData)
+        setEnrollment(selected)
+      } catch (journeyError) {
+        setError(journeyError instanceof Error ? journeyError.message : 'Unable to load your journey')
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadJourney()
+  }, [code])
+
+  if (loading) return <p className="text-gray-500">Loading your learning journey...</p>
+  if (error) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">{error}</div>
+  if (!course || !enrollment) {
+    return <div className="space-y-4"><PageHeading eyebrow="Your personalized roadmap" title="Learning Journey" description="Enroll in a course to generate your first adaptive path." /><Link to="/courses" className="inline-flex rounded-lg bg-indigo-600 px-5 py-3 font-semibold text-white">Browse courses</Link></div>
+  }
+
+  const completedTopics = enrollment.baseline_completed ? Math.min(1, course.topics.length) : 0
+  const progress = course.topics.length ? Math.round((completedTopics / course.topics.length) * 100) : 0
+
   return (
     <div className="space-y-6">
-      <PageHeading eyebrow="Personalized roadmap" title="Learning Journey" description="Your adaptive path updates as your skills grow." />
+      <PageHeading eyebrow="Personalized roadmap" title={course.title} description="Your adaptive path updates as your skills grow." />
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <section className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-6">
-            <div><p className="text-sm text-indigo-600 font-semibold">Java Programming</p><h2 className="text-xl font-bold">Topic roadmap</h2></div>
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">72% complete</span>
+            <div><p className="text-sm text-indigo-600 font-semibold">{course.code.toUpperCase()}</p><h2 className="text-xl font-bold">Topic roadmap</h2></div>
+            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{progress}% unlocked</span>
           </div>
           <ol className="space-y-4">
-            {roadmapTopics.map((topic, index) => (
+            {course.topics.map((topic, index) => {
+              const completed = index < completedTopics
+              const current = index === completedTopics
+              return (
               <li key={topic.title} className="flex gap-4 rounded-xl border border-gray-100 p-4">
-                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${topic.state === 'Completed' ? 'bg-emerald-100 text-emerald-700' : topic.state === 'In progress' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'}`}>{index + 1}</span>
-                <div className="min-w-0 flex-1"><div className="flex justify-between gap-3"><strong>{topic.title}</strong><span className="text-xs text-gray-500">{topic.state}</span></div><p className="mt-1 text-sm text-gray-500">{topic.score ? `Topic performance: ${topic.score}%` : 'Unlock this topic after completing the current step.'}</p></div>
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${completed ? 'bg-emerald-100 text-emerald-700' : current ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'}`}>{index + 1}</span>
+                <div className="min-w-0 flex-1"><div className="flex justify-between gap-3"><strong>{topic.title}</strong><span className="text-xs text-gray-500">{completed ? 'Baseline complete' : current ? 'Current focus' : 'Upcoming'}</span></div><p className="mt-1 text-sm text-gray-500">{topic.description || 'Guided practice and checks will appear here.'}</p><Link to={`/courses/${course.code}/topics/${topic.id}/assessment`} className="mt-2 inline-block text-xs font-semibold text-indigo-600">Practice topic →</Link></div>
               </li>
-            ))}
+              )
+            })}
           </ol>
         </section>
         <section className="rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-500 p-6 text-white shadow-sm">
-          <p className="text-sm font-semibold text-indigo-100">Current focus</p><h2 className="mt-2 text-2xl font-bold">Loops</h2><p className="mt-3 text-indigo-100">Keep practicing loop control and iteration patterns. You are close to unlocking Methods.</p>
-          <div className="mt-8 h-3 overflow-hidden rounded-full bg-white/20"><div className="h-full w-[72%] rounded-full bg-white" /></div><p className="mt-2 text-right text-sm text-indigo-100">72% topic mastery</p>
-          <button className="mt-8 w-full rounded-lg bg-white px-4 py-3 font-semibold text-indigo-700 hover:bg-indigo-50">Start topic assessment</button>
+          <p className="text-sm font-semibold text-indigo-100">Current focus</p><h2 className="mt-2 text-2xl font-bold">{course.topics[completedTopics]?.title || 'All topics complete'}</h2><p className="mt-3 text-indigo-100">{course.topics[completedTopics]?.description || 'Review your course topics and keep building momentum.'}</p>
+          <div className="mt-8 h-3 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-white" style={{ width: `${progress}%` }} /></div><p className="mt-2 text-right text-sm text-indigo-100">{enrollment.baseline_completed ? `Baseline score: ${enrollment.baseline_score ?? 0}` : 'Baseline assessment required'}</p>
+          {!enrollment.baseline_completed && <Link to={`/courses/${course.code}/baseline`} className="mt-8 block w-full rounded-lg bg-white px-4 py-3 text-center font-semibold text-indigo-700 hover:bg-indigo-50">Take baseline assessment</Link>}
         </section>
       </div>
     </div>

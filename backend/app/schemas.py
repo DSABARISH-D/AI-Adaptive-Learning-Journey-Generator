@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
@@ -82,5 +84,8 @@ class EnrollmentOut(BaseModel):
     course_code: str | None = None
     course_title: str | None = None
     status: str
+    enrolled_at: datetime
+    baseline_score: int | None = None
+    baseline_completed: bool = False
 
     model_config = ConfigDict(from_attributes=True)

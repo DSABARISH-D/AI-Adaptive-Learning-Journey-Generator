@@ -54,9 +54,31 @@ export interface AuthTokenResponse {
 export interface QuizQuestion {
   text: string
   options: string[]
+  topic?: string | null
 }
 
 export interface BaselineQuizResponse {
   quiz_id: number
   questions: QuizQuestion[]
+}
+
+export interface AssessmentResult {
+  score: number
+  total: number
+  percentage: number
+  strong_topics: Array<{ topic: string; score: number | null; status: string }>
+  medium_topics: Array<{ topic: string; score: number | null; status: string }>
+  weak_topics: Array<{ topic: string; score: number | null; status: string }>
+}
+
+export interface DashboardData {
+  user: User
+  stats: { overall_progress: number; courses_enrolled: number; topics_completed: number; assessments_attempted: number; average_score: number; latest_score: number | null }
+  current_course: { code: string; title: string } | null
+  current_topic: { title: string; description: string | null } | null
+  roadmap: Array<{ title: string; description: string | null; status: string; score: number | null }>
+  recommendation: { topic: string; message: string; priority: string }
+  recent_activity: Array<{ type: string; title: string; score: number | null; created_at: string }>
+  daily_goal: { minutes: number; target: number }
+  upcoming_tasks: Array<{ title: string; kind: string }>
 }

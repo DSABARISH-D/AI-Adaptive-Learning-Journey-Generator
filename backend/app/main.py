@@ -12,6 +12,7 @@ from app.routers.auth import router as auth_router
 from app.routers.courses import router as courses_router
 from app.routers.assessment import router as assessment_router
 from app.routers.profile import router as profile_router
+from app.routers.dashboard import router as dashboard_router
 from app.seed import seed_courses
 
 
@@ -48,6 +49,7 @@ app.include_router(auth_router)
 app.include_router(profile_router)
 app.include_router(courses_router)
 app.include_router(assessment_router)
+app.include_router(dashboard_router)
 
 
 # ---------------------------------------------------------------------------

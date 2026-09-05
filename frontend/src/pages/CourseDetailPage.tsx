@@ -65,12 +65,12 @@ export function CourseDetailPage() {
   }
 
   return (
-    <div className="panel max-w-4xl space-y-8">
+    <div className="panel course-detail-page max-w-4xl space-y-8">
       <Link to="/courses" className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 mb-2">
         ← Back to courses
       </Link>
       
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+      <div className="detail-hero bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">{course.title}</h1>
         {course.summary && <p className="text-lg text-gray-600 mb-8">{course.summary}</p>}
         
@@ -88,7 +88,7 @@ export function CourseDetailPage() {
         
         <div className="mt-8 pt-8 border-t border-gray-100">
           {/* Enrollment Section */}
-          <section className="bg-gray-800 rounded-xl p-6 border border-gray-700 text-white">
+          <section className="progress-section rounded-xl p-6 border">
             <h2 className="text-xl font-bold mb-4">Your Progress</h2>
             
             {!enrollment ? (

@@ -7,6 +7,8 @@ import { ProfilePage } from './pages/ProfilePage'
 import { LoginPage } from './pages/LoginPage'
 import { OAuthCallbackPage } from './pages/OAuthCallbackPage'
 import { BaselineAssessmentPage } from './pages/BaselineAssessmentPage'
+import { TopicAssessmentPage } from './pages/TopicAssessmentPage'
+import { AssessmentResultPage } from './pages/AssessmentResultPage'
 import { AssessmentsPage, JourneyPage, ProgressPage, ResourcesPage, SettingsPage, TutorPage } from './pages/FeaturePages'
 import { AuthProvider } from './hooks/useAuth'
 import './styles/index.css'
@@ -23,6 +25,9 @@ function App() {
             <Route path="courses" element={<CoursesPage />} />
             <Route path="courses/:code" element={<CourseDetailPage />} />
             <Route path="courses/:code/baseline" element={<BaselineAssessmentPage />} />
+            <Route path="courses/:code/baseline/:quizId/result" element={<AssessmentResultPage />} />
+            <Route path="courses/:code/topics/:topicId/assessment" element={<TopicAssessmentPage />} />
+            <Route path="courses/:code/journey" element={<JourneyPage />} />
             <Route path="journey" element={<JourneyPage />} />
             <Route path="assessments" element={<AssessmentsPage />} />
             <Route path="tutor" element={<TutorPage />} />

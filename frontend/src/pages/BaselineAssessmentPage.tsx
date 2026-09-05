@@ -14,7 +14,7 @@ export function BaselineAssessmentPage() {
   const [error, setError] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [submitting, setSubmitting] = useState(false)
-  const [score, setScore] = useState<{ score: number; total: number } | null>(null)
+  const [score, setScore] = useState<{ score: number; total: number; quiz_id: number } | null>(null)
 
   useEffect(() => {
     async function fetchQuiz() {
@@ -52,7 +52,7 @@ export function BaselineAssessmentPage() {
           answers: answerArray
         })
       })
-      setScore(result)
+      setScore({ ...result, quiz_id: quiz.quiz_id })
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to submit assessment')
     } finally {
@@ -61,12 +61,12 @@ export function BaselineAssessmentPage() {
   }
 
   if (loading) {
-    return <div className="p-8 text-white">Generating your personalized assessment...</div>
+    return <div className="assessment-page p-8">Generating your personalized assessment...</div>
   }
 
   if (error) {
     return (
-      <div className="p-8 text-white">
+      <div className="assessment-page p-8">
         <h2 className="text-2xl text-red-400 mb-4">Error</h2>
         <p>{error}</p>
         <button onClick={() => navigate(`/courses/${code}`)} className="mt-4 px-4 py-2 bg-indigo-600 rounded">
@@ -78,16 +78,16 @@ export function BaselineAssessmentPage() {
 
   if (score) {
     return (
-      <div className="p-8 text-white max-w-2xl mx-auto">
+      <div className="assessment-page p-8">
         <h2 className="text-3xl font-bold mb-6">Assessment Complete!</h2>
-        <div className="bg-gray-800 p-8 rounded-xl border border-gray-700 text-center">
+        <div className="assessment-card text-center">
           <p className="text-xl mb-2">Your Baseline Score:</p>
           <p className="text-5xl font-bold text-indigo-400 mb-6">{score.score} / {score.total}</p>
           <p className="text-gray-300 mb-8">
             We will use these results to adapt the learning journey to your current skill level.
           </p>
           <button 
-            onClick={() => navigate(`/courses/${code}`)}
+            onClick={() => navigate(`/courses/${code}/baseline/${score.quiz_id}/result`)}
             className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium transition-colors"
           >
             Generate My Learning Journey
@@ -98,13 +98,13 @@ export function BaselineAssessmentPage() {
   }
 
   return (
-    <div className="p-8 text-white max-w-3xl mx-auto pb-24">
+    <div className="assessment-page p-8 pb-24">
       <h2 className="text-3xl font-bold mb-2">Baseline Assessment</h2>
       <p className="text-gray-400 mb-8">Answer these questions to help us personalize your learning path.</p>
 
       <div className="space-y-8">
         {quiz?.questions.map((q, qIndex) => (
-          <div key={qIndex} className="bg-gray-800 p-6 rounded-xl border border-gray-700">
+          <div key={qIndex} className="assessment-card">
             <h3 className="text-lg font-medium mb-4">{qIndex + 1}. {q.text}</h3>
             <div className="space-y-3">
               {q.options.map((opt, oIndex) => (

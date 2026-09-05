@@ -60,6 +60,29 @@ def google_callback(
     return RedirectResponse(url=frontend_url)
 
 
+@router.get("/google/exchange", response_model=AuthTokenResponse)
+def google_exchange(code: str = Query(...), db: Session = Depends(get_db)) -> AuthTokenResponse:
+    """Exchange a code when Google redirects directly to the frontend."""
+    try:
+        _, userinfo = exchange_google_code(code)
+    except Exception as exc:  # pragma: no cover - provider failure is integration-specific
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google login failed") from exc
+
+    user = db.query(User).filter(User.email == userinfo["email"]).first()
+    if user is None:
+        user = User(
+            email=userinfo["email"],
+            full_name=userinfo.get("name"),
+            google_sub=userinfo.get("sub"),
+            avatar_url=userinfo.get("picture"),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    return AuthTokenResponse(token=create_access_token(str(user.id)), user=UserOut.model_validate(user))
+
+
 @router.post("/dev-login")
 def dev_login(db: Session = Depends(get_db)):
     """Development-only login: creates a demo user and returns a JWT.
