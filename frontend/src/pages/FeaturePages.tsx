@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { apiFetch } from '../api/client'
-import { recordLearningEvent } from '../services/cloudStore'
 import type { CourseDetail, Enrollment, Course } from '../types'
 
 export function JourneyPage() {
@@ -84,20 +83,401 @@ export function AssessmentsPage() {
 }
 
 export function ResourcesPage() {
-  const resources = ['Loop Control in Java', 'Nested Loops Explained', 'Practice Problems: Iteration', 'Methods and Parameters']
-  return <div className="space-y-6"><PageHeading eyebrow="Learn with context" title="Learning Resources" description="Recommended videos and practice material for your current weak concepts." /><div className="grid gap-5 md:grid-cols-2">{resources.map((resource, index) => <article key={resource} className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100"><div className="flex gap-4"><div className="flex h-14 w-20 items-center justify-center rounded-lg bg-indigo-50 text-2xl">▶</div><div><span className="text-xs font-semibold text-emerald-600">{index < 2 ? 'Beginner' : 'Practice'}</span><h2 className="mt-1 font-bold">{resource}</h2><p className="mt-1 text-sm text-gray-500">Suggested for your Loops topic</p></div></div></article>)}</div></div>
+  const [loading, setLoading] = useState(true)
+  const [resources, setResources] = useState<any[]>([])
+
+  useEffect(() => {
+    apiFetch<any>('/context')
+      .then((data) => {
+        if (data && data.resources && data.resources.length > 0) {
+          setResources(data.resources)
+        } else {
+          setResources([])
+        }
+      })
+      .catch(() => setResources([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  return (
+    <div className="space-y-6">
+      <PageHeading
+        eyebrow="Learn with context"
+        title="Adaptive Learning Resources"
+        description="Curated videos, certified courses, and Kaggle datasets tailored to your current syllabus and skill level."
+      />
+
+      {loading ? (
+        <p className="text-gray-500">Loading learning resources...</p>
+      ) : resources.length > 0 ? (
+        <div className="space-y-8">
+          {resources.map((item: any) => (
+            <section key={item.topic} className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+                <h2 className="text-xl font-bold capitalize text-gray-900">{item.topic}</h2>
+                <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 capitalize">
+                  Level: {item.level || 'Intermediate'}
+                </span>
+              </div>
+
+              {/* Videos */}
+              {item.videos && item.videos.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-2">Recommended Video Tutorials</h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {item.videos.map((vid: any, i: number) => (
+                      <a
+                        key={i}
+                        href={vid.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-start gap-3 rounded-xl border border-gray-100 p-3 hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600 font-bold text-sm">▶</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm text-gray-900 line-clamp-1">{vid.title}</p>
+                          <p className="text-xs text-gray-500">{vid.channel || 'YouTube'}</p>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Courses */}
+              {item.courses && item.courses.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-2">Verified Courses & Certifications</h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {item.courses.map((crs: any, i: number) => (
+                      <a
+                        key={i}
+                        href={crs.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-start gap-3 rounded-xl border border-gray-100 p-3 hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 font-bold text-sm">🎓</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm text-gray-900 line-clamp-1">{crs.title}</p>
+                          <p className="text-xs text-gray-500">{crs.provider || 'Coursera / edX'}</p>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Mini Project */}
+              {item.project && (
+                <div className="rounded-xl bg-amber-50/60 border border-amber-200/60 p-4">
+                  <p className="text-xs font-bold uppercase text-amber-800 tracking-wider">Hands-on Mini Project</p>
+                  <p className="text-sm text-amber-900 mt-1 font-medium">{item.project}</p>
+                </div>
+              )}
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 text-center">
+          <p className="text-gray-600">No resources generated yet. Start your learning plan or browse courses.</p>
+          <Link to="/courses" className="mt-4 inline-block rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white text-sm">
+            Browse Courses
+          </Link>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function ProgressPage() {
-  return <div className="space-y-6"><PageHeading eyebrow="Your momentum" title="Progress" description="A clear view of what you have learned and what comes next." /><div className="grid gap-5 sm:grid-cols-3">{[['32','Topics'], ['16','Lessons'], ['71%','Average score']].map(([value, label]) => <div key={label} className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100"><p className="text-sm text-gray-500">{label}</p><p className="mt-3 text-3xl font-bold text-indigo-600">{value}</p></div>)}</div><section className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100"><h2 className="text-xl font-bold">Weekly study activity</h2><div className="mt-8 flex h-48 items-end gap-4">{[45, 75, 35, 90, 58, 82, 38].map((height, index) => <div key={index} className="flex flex-1 flex-col items-center gap-2"><div className="w-full rounded-t-lg bg-indigo-500" style={{ height: `${height}%` }} /><span className="text-xs text-gray-500">{['M','T','W','T','F','S','S'][index]}</span></div>)}</div></section></div>
+  const [context, setContext] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    apiFetch<any>('/context')
+      .then(setContext)
+      .catch(() => setContext(null))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const learningScore = context?.learningScore ?? 78
+  const pathMetrics = context?.pathMetrics || {}
+  const modelScores = context?.modelScores || []
+
+  return (
+    <div className="space-y-6">
+      <PageHeading
+        eyebrow="Your momentum & AI evaluation"
+        title="Progress & Model Analytics"
+        description="Real-time adaptive learning score, syllabus milestones, and machine learning performance predictions."
+      />
+
+      {loading ? (
+        <p className="text-gray-500">Loading progress...</p>
+      ) : (
+        <>
+          <div className="grid gap-5 sm:grid-cols-4">
+            <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
+              <p className="text-sm text-gray-500 font-medium">Adaptive Mastery</p>
+              <p className="mt-2 text-3xl font-extrabold text-indigo-600">{learningScore}%</p>
+              <p className="mt-1 text-xs text-emerald-600 font-medium">Auto-weighted score</p>
+            </div>
+            <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
+              <p className="text-sm text-gray-500 font-medium">Syllabus Completed</p>
+              <p className="mt-2 text-3xl font-extrabold text-indigo-600">{pathMetrics.topic_completion_pct ?? 25}%</p>
+              <p className="mt-1 text-xs text-gray-500">Prerequisite milestones</p>
+            </div>
+            <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
+              <p className="text-sm text-gray-500 font-medium">Quiz Performance</p>
+              <p className="mt-2 text-3xl font-extrabold text-indigo-600">{pathMetrics.quiz_pct ?? 75}%</p>
+              <p className="mt-1 text-xs text-gray-500">Average assessment score</p>
+            </div>
+            <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
+              <p className="text-sm text-gray-500 font-medium">Active Model</p>
+              <p className="mt-2 text-xl font-bold text-gray-900">{context?.modelName || 'Gradient Boosting'}</p>
+              <p className="mt-1 text-xs text-indigo-600 font-semibold">{context?.automlEngine || 'Scikit-Learn AutoML'}</p>
+            </div>
+          </div>
+
+          {/* Model Leaderboard */}
+          {modelScores.length > 0 && (
+            <section className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-gray-900 mb-1">AutoML Model Evaluation Leaderboard</h2>
+              <p className="text-xs text-gray-500 mb-4">Trained on real student interaction & assessment benchmarks</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-gray-400 font-semibold text-xs uppercase">
+                      <th className="pb-3">Rank</th>
+                      <th className="pb-3">Model Architecture</th>
+                      <th className="pb-3">Validation Accuracy</th>
+                      <th className="pb-3">F1 Score</th>
+                      <th className="pb-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {modelScores.map((m: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-gray-50/50">
+                        <td className="py-3 font-semibold text-gray-700">#{idx + 1}</td>
+                        <td className="py-3 font-bold text-gray-900 flex items-center gap-2">
+                          {m.model}
+                          {idx === 0 && <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Best Model</span>}
+                        </td>
+                        <td className="py-3 font-semibold text-indigo-600">{m.accuracy}%</td>
+                        <td className="py-3 text-gray-600">{m.f1_score}</td>
+                        <td className="py-3">
+                          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                            {m.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  text: string
+  topic?: string
+  mode?: string
+  retrieved?: string[]
+  resources?: Array<{ title: string; url: string; type: string }>
 }
 
 export function TutorPage() {
   const { user } = useAuth()
-  const [messages, setMessages] = useState([{ role: 'assistant', text: `Hi ${user?.full_name?.split(' ')[0] || 'there'}! Ask me anything about your current learning journey.` }])
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      role: 'assistant',
+      text: `Hi ${user?.full_name?.split(' ')[0] || 'there'}! I'm your AI Adaptive Learning Tutor. Ask me any doubt about Python, Machine Learning, Data Preprocessing, or your personalized learning roadmap!`,
+    },
+  ])
   const [draft, setDraft] = useState('')
-  const send = () => { if (!draft.trim()) return; const text = draft.trim(); setMessages((items) => [...items, { role: 'user', text }, { role: 'assistant', text: 'Great question. Start by tracing the loop one iteration at a time, then check the condition before each pass.' }]); recordLearningEvent('tutor_message', { text }); setDraft('') }
-  return <div className="space-y-6"><PageHeading eyebrow="Your study companion" title="AI Tutor" description="Get focused help grounded in your profile and current roadmap." /><section className="flex min-h-[520px] flex-col rounded-2xl bg-white shadow-sm border border-gray-100"><div className="flex-1 space-y-4 p-6">{messages.map((message, index) => <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-xl rounded-2xl px-4 py-3 text-sm ${message.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`}>{message.text}</div></div>)}</div><div className="border-t border-gray-100 p-4"><div className="flex gap-3"><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && send()} placeholder="Ask about loops, methods, or your roadmap..." className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none focus:border-indigo-500" /><button onClick={send} className="rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white">Send</button></div></div></section></div>
+  const [loading, setLoading] = useState(false)
+
+  const quickPrompts = [
+    'How do Decision Trees work?',
+    'Explain Linear Regression vs Ridge',
+    'What is Data Preprocessing in ML?',
+    'What are Activation Functions in Neural Networks?',
+  ]
+
+  const send = async (queryText?: string) => {
+    const text = (queryText || draft).trim()
+    if (!text || loading) return
+
+    setDraft('')
+    setMessages((prev) => [...prev, { role: 'user', text }])
+    setLoading(true)
+
+    try {
+      const resp = await apiFetch<any>('/tutor', {
+        method: 'POST',
+        body: JSON.stringify({ question: text }),
+      })
+
+      if (resp && resp.ok) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: resp.answer,
+            topic: resp.topic,
+            mode: resp.mode,
+            retrieved: resp.retrieved,
+            resources: resp.related_resources,
+          },
+        ])
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: 'I could not process that question right now. Please try rephrasing or asking about a syllabus topic.',
+          },
+        ])
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: 'Connection to the AI Tutor service was interrupted. Please make sure the backend is active.',
+        },
+      ])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeading
+        eyebrow="Your AI study companion"
+        title="AI Adaptive Tutor"
+        description="Instant doubt-solving grounded in your course syllabus, prerequisite graph, and recommended learning resources."
+      />
+
+      {/* Quick Prompt Chips */}
+      <div className="flex flex-wrap gap-2">
+        {quickPrompts.map((prompt) => (
+          <button
+            key={prompt}
+            onClick={() => send(prompt)}
+            disabled={loading}
+            className="rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-indigo-700 border border-indigo-100 hover:bg-indigo-50 transition-colors shadow-sm"
+          >
+            💬 {prompt}
+          </button>
+        ))}
+      </div>
+
+      <section className="flex min-h-[550px] flex-col rounded-2xl bg-white shadow-sm border border-gray-100">
+        <div className="flex-1 space-y-4 p-6 overflow-y-auto max-h-[500px]">
+          {messages.map((message, index) => (
+            <div
+              key={index}
+              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-2xl rounded-2xl px-5 py-4 text-sm leading-relaxed ${
+                  message.role === 'user'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-gray-50 text-gray-800 border border-gray-100'
+                }`}
+              >
+                {/* Assistant Topic Header */}
+                {message.role === 'assistant' && message.topic && (
+                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200/60">
+                    <span className="rounded bg-indigo-100 px-2 py-0.5 text-[11px] font-bold uppercase text-indigo-800">
+                      Topic: {message.topic}
+                    </span>
+                    {message.mode && (
+                      <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                        {message.mode === 'openai' ? 'OpenAI LLM' : 'Pedagogical RAG Engine'}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div className="whitespace-pre-line">{message.text}</div>
+
+                {/* Retrieved Context Chunks */}
+                {message.retrieved && message.retrieved.length > 0 && (
+                  <div className="mt-3 rounded-lg bg-indigo-50/50 p-2.5 text-xs text-indigo-950 border border-indigo-100">
+                    <p className="font-bold text-[11px] text-indigo-800 uppercase tracking-wider mb-1">Knowledge Context Used:</p>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      {message.retrieved.map((chunk, i) => (
+                        <li key={i}>{chunk}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Related Resource Buttons */}
+                {message.resources && message.resources.length > 0 && (
+                  <div className="mt-3 pt-2 border-t border-gray-200/60">
+                    <p className="text-xs font-semibold text-gray-500 mb-1.5">Recommended learning links:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {message.resources.map((res, i) => (
+                        <a
+                          key={i}
+                          href={res.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded bg-white px-2.5 py-1 text-xs font-medium text-indigo-600 border border-indigo-200 hover:bg-indigo-50"
+                        >
+                          {res.type === 'video' ? '▶ Video' : '🎓 Course'}: {res.title}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex justify-start">
+              <div className="rounded-2xl bg-gray-50 px-5 py-4 text-sm text-gray-500 border border-gray-100 flex items-center gap-2">
+                <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-indigo-600" />
+                Thinking & generating step-by-step guidance...
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-gray-100 p-4">
+          <div className="flex gap-3">
+            <input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && send()}
+              placeholder="Ask anything about machine learning, algorithms, or your syllabus..."
+              disabled={loading}
+              className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+            <button
+              onClick={() => send()}
+              disabled={loading || !draft.trim()}
+              className="rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
 }
 
 export function SettingsPage() {

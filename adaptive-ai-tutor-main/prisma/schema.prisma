@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id
+  name      String?
+  email     String?  @unique
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studentProfile  StudentProfile?
+  tutorSessions   TutorSession[]
+  referralProfile ReferralProfile?
+}
+
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  interest  String?
+  source    String   @default("waitlist")
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+model StudentProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  gradeLevel          String?
+  subjects            String[]
+  shortTermGoals      String?
+  longTermGoals       String?
+  explanationStyle    String   @default("balanced")
+  explanationLength   String   @default("medium")
+  difficultyLevel     String   @default("medium")
+  interests           String[]
+  onboardingCompleted Boolean  @default(false)
+  learningModality    String   @default("auto")
+  modalityWeights     Json?
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectMastery  SubjectMastery[]
+  mistakePatterns MistakePattern[]
+  memoryImports   MemoryImport[]
+  learnerMemory   LearnerMemory?
+}
+
+model MemoryImport {
+  id               String   @id @default(cuid())
+  studentProfileId String
+  provider         String
+  sourceLabel      String?
+  rawText          String
+  extractedSummary String?
+  learnerSignals   Json?
+  createdAt        DateTime @default(now())
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  @@index([studentProfileId, provider])
+  @@index([createdAt])
+}
+
+model LearnerMemory {
+  id                    String   @id @default(cuid())
+  studentProfileId      String   @unique
+  learnerType           String?
+  confidence            Float    @default(0)
+  summary               String?
+  strengths             String[]
+  frictionPoints        String[]
+  preferredPatterns     String[]
+  recommendedStrategies String[]
+  evidenceCount         Int      @default(0)
+  sourceCount           Int      @default(0)
+  rawSignals            Json?
+  detectedModality      String?
+  modalityScores        Json?
+  lastAnalyzedAt        DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+}
+
+model SubjectMastery {
+  id               String   @id @default(cuid())
+  studentProfileId String
+  subject          String
+  topic            String
+  masteryScore     Float    @default(0)
+  confidenceLevel  Float    @default(0)
+  totalAttempts    Int      @default(0)
+  correctAttempts  Int      @default(0)
+  lastPracticed    DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([studentProfileId, subject, topic])
+}
+
+model MistakePattern {
+  id               String   @id @default(cuid())
+  studentProfileId String
+  subject          String
+  topic            String
+  mistakeType      String
+  description      String
+  frequency        Int      @default(1)
+  lastSeen         DateTime @default(now())
+  resolved         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  @@index([studentProfileId, subject])
+}
+
+model TutorSession {
+  id        String   @id @default(cuid())
+  userId    String
+  subject   String?
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  topicsCovered    String[]
+  understood       String[]
+  struggled        String[]
+  reviewNext       String[]
+  summaryText      String?
+  summarized       Boolean  @default(false)
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SessionMessage[]
+}
+
+model SessionMessage {
+  id             String   @id @default(cuid())
+  tutorSessionId String
+  role           String
+  content        String
+  createdAt      DateTime @default(now())
+
+  tutorSession TutorSession @relation(fields: [tutorSessionId], references: [id], onDelete: Cascade)
+
+  @@index([tutorSessionId, createdAt])
+}
+
+model ReferralProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  referralCode String   @unique
+  referredBy   String?
+  referralCount Int     @default(0)
+  points       Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([points(sort: Desc)])
+  @@index([referralCode])
+}

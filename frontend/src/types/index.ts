@@ -74,7 +74,7 @@ export interface AssessmentResult {
 export interface DashboardData {
   user: User
   stats: { overall_progress: number; courses_enrolled: number; topics_completed: number; assessments_attempted: number; average_score: number; latest_score: number | null }
-  current_course: { code: string; title: string } | null
+  current_course: { code: string; title: string; subtitle?: string; icon?: string; level?: string } | null
   current_topic: { title: string; description: string | null } | null
   roadmap: Array<{ title: string; description: string | null; status: string; score: number | null }>
   recommendation: { topic: string; message: string; priority: string }
@@ -82,3 +82,105 @@ export interface DashboardData {
   daily_goal: { minutes: number; target: number }
   upcoming_tasks: Array<{ title: string; kind: string }>
 }
+
+export interface PersonalizedCourse {
+  id: string | number
+  code: string
+  title: string
+  subtitle?: string
+  icon?: string
+  description?: string
+  difficulty?: string
+  total_topics?: number
+  progress?: number
+  currentTopic?: string
+  weakConcept?: string
+  is_active?: boolean
+  topics?: Array<{
+    id: number
+    title: string
+    subtopics?: string
+    defaultScore?: number
+    defaultStatus?: string
+    order?: number
+  }>
+}
+
+export interface RoadmapTopic {
+  id: number
+  title: string
+  subtopics?: string
+  defaultScore: number
+  defaultStatus: 'completed' | 'in-progress' | 'recommended' | 'locked'
+  order: number
+}
+
+export interface TopicPerformanceItem {
+  title: string
+  score: number
+  status: string
+}
+
+export interface LearningJourneyPayload {
+  course: {
+    code: string
+    title: string
+    subtitle: string
+    icon: string
+    description: string
+    level: string
+    progress: number
+  }
+  topics: RoadmapTopic[]
+  currentTopic: string
+  weakConcept: string
+  weakConceptDetails: string
+  performance: TopicPerformanceItem[]
+  aiRecommendation: {
+    title: string
+    message: string
+    weakConcept: string
+    buttonText: string
+  }
+  user: any
+}
+
+export interface VideoResource {
+  title: string
+  channel: string
+  views: string
+  age: string
+  duration: string
+  url: string
+}
+
+export interface QuickNotes {
+  topic: string
+  bullets: string[]
+}
+
+export interface DocumentationResource {
+  name: string
+  type: string
+  url: string
+  provider: string
+}
+
+export interface LearningResourcesPayload {
+  course: {
+    code: string
+    title: string
+    subtitle: string
+    icon: string
+  }
+  topic: string
+  progress: number
+  language: string
+  englishResources: VideoResource[]
+  tamilResources: VideoResource[]
+  quickNotes: QuickNotes
+  additionalDocs: DocumentationResource[]
+  tutorTip: string
+  user: any
+}
+
