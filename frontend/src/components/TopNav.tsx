@@ -10,7 +10,7 @@ export function TopNav() {
   const [switching, setSwitching] = useState<boolean>(false)
 
   useEffect(() => {
-    apiFetch<any>('/profile')
+    apiFetch<{ currentCourse?: string }>('/profile')
       .then((data) => {
         if (data && data.currentCourse) {
           setCurrentCourse(data.currentCourse)
@@ -23,7 +23,7 @@ export function TopNav() {
     if (newCode === currentCourse || switching) return
     setSwitching(true)
     try {
-      await apiFetch<any>('/profile/switch-course', {
+      await apiFetch<{ success?: boolean }>('/profile/switch-course', {
         method: 'POST',
         body: JSON.stringify({ course_code: newCode })
       })

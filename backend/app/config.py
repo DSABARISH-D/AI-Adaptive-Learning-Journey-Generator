@@ -30,8 +30,9 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     gemini_api_key: str = ""
 
-    # External APIs
-    youtube_api_key: str = ""
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    bedrock_model_id: str = ""
+    mastery_threshold: float = 70.0
 
     model_config = SettingsConfigDict(
         env_file=REPOSITORY_ROOT / ".env",

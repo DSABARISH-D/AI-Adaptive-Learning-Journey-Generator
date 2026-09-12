@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,8 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, get_db
-from app.models import AssessmentAttempt, BaselineQuiz, Course, CourseTopic, Enrollment, LearningActivity, StudentTopicProgress, TopicAssessment, User
+from app.models import AssessmentAnswer, AssessmentAttempt, BaselineQuiz, Course, CourseTopic, Enrollment, LearningActivity, StudentTopicProgress, TopicAssessment, User
+from app.services.graph_service import load_topics
 from app.services.llm import get_llm
+from app.services.mastery_service import MASTERED, upsert_topic_mastery
 
 router = APIRouter(prefix="/api/courses", tags=["assessment"])
 
@@ -109,20 +110,19 @@ def submit_topic_assessment(course_code: str, topic_id: int, payload: SubmitAnsw
     if len(payload.answers) != len(questions):
         raise HTTPException(status_code=400, detail={"code": "BAD_REQUEST", "message": "Incorrect number of answers"})
 
-    score = sum(answer == question["correct_index"] for answer, question in zip(payload.answers, questions))
-    percentage = round(score / len(questions) * 100) if questions else 0
-    progress = db.scalars(select(StudentTopicProgress).where(StudentTopicProgress.enrollment_id == enrollment.id, StudentTopicProgress.topic_id == topic_id)).first()
-    if progress is None:
-        progress = StudentTopicProgress(user_id=user.id, enrollment_id=enrollment.id, topic_id=topic_id)
-    progress.score = percentage
-    progress.status = "mastered" if percentage >= 80 else "completed" if percentage >= 70 else "needs_practice" if percentage >= 50 else "weak"
-    if progress.status in {"mastered", "completed"}:
-        progress.completed_at = progress.completed_at or datetime.utcnow()
-    db.add(progress)
-    db.add(AssessmentAttempt(user_id=user.id, enrollment_id=enrollment.id, assessment_type="topic", score=score, total=len(questions)))
-    db.add(LearningActivity(user_id=user.id, enrollment_id=enrollment.id, activity_type="topic_assessment", title=f"Completed {assessment.topic.title} assessment", score=percentage, minutes=10))
+    earned = sum(1.0 for answer, question in zip(payload.answers, questions) if answer == question["correct_index"])
+    available = float(len(questions))
+    percentage = (earned / available) * 100.0 if available else 0.0
+    upsert_topic_mastery(db, user_id=user.id, enrollment_id=enrollment.id, topic_id=topic_id, score=percentage)
+    attempt = AssessmentAttempt(user_id=user.id, enrollment_id=enrollment.id, assessment_type="topic", score=int(earned), total=len(questions))
+    db.add(attempt)
+    db.flush()
+    for index, (answer, question) in enumerate(zip(payload.answers, questions)):
+        correct = answer == question["correct_index"]
+        db.add(AssessmentAnswer(attempt_id=attempt.id, question_index=index, topic_id=topic_id, selected_index=answer, is_correct=correct, earned_points=1.0 if correct else 0.0))
+    db.add(LearningActivity(user_id=user.id, enrollment_id=enrollment.id, activity_type="topic_assessment", title=f"Completed {assessment.topic.title} assessment", score=int(round(percentage)), minutes=10))
     db.commit()
-    return ScoreResponse(score=score, total=len(questions))
+    return ScoreResponse(score=int(earned), total=len(questions))
 
 
 @router.get("/{course_code}/baseline/{quiz_id}/result", response_model=AssessmentResultResponse)
@@ -135,14 +135,14 @@ def get_baseline_result(course_code: str, quiz_id: int, db: Session = Depends(ge
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Assessment result not found"})
 
     progress_rows = db.scalars(select(StudentTopicProgress).where(StudentTopicProgress.enrollment_id == enrollment.id)).all()
-    results = [TopicResult(topic=row.topic.title, score=row.score, status=row.status) for row in progress_rows if row.topic is not None]
+    results = [TopicResult(topic=row.topic.title, score=None if row.score is None else round(row.score), status=row.status) for row in progress_rows if row.topic is not None]
     return AssessmentResultResponse(
         score=attempt.score,
         total=attempt.total,
         percentage=round(attempt.score / attempt.total * 100) if attempt.total else 0,
-        strong_topics=[result for result in results if result.score is not None and result.score >= 70],
-        medium_topics=[result for result in results if result.score is not None and 50 <= result.score < 70],
-        weak_topics=[result for result in results if result.score is not None and result.score < 50],
+        strong_topics=[result for result in results if result.status == MASTERED],
+        medium_topics=[],
+        weak_topics=[result for result in results if result.status != MASTERED],
     )
 
 
@@ -179,7 +179,7 @@ def get_baseline_quiz(
     except Exception as e:
         raise HTTPException(status_code=500, detail={"code": "LLM_ERROR", "message": f"Failed to generate quiz: {str(e)}"})
 
-    quiz_json = _assign_question_topics(result.model_dump(), db.scalars(select(CourseTopic).where(CourseTopic.course_id == course.id).order_by(CourseTopic.order)).all())
+    quiz_json = _assign_question_topics(result.model_dump(), load_topics(db, course.id))
 
     quiz = BaselineQuiz(enrollment_id=enrollment.id, questions_json=quiz_json)
     db.add(quiz)
@@ -230,27 +230,33 @@ def submit_baseline_quiz(
 
     enrollment.baseline_score = score
     enrollment.baseline_completed = True
-    db.add(AssessmentAttempt(user_id=user.id, enrollment_id=enrollment.id, score=score, total=len(questions)))
+    attempt = AssessmentAttempt(user_id=user.id, enrollment_id=enrollment.id, score=score, total=len(questions))
+    db.add(attempt)
+    db.flush()
 
-    topics = db.scalars(select(CourseTopic).where(CourseTopic.course_id == course.id).order_by(CourseTopic.order)).all()
+    topics = load_topics(db, course.id)
     topics_by_name = {topic.title: topic for topic in topics}
-    topic_scores: dict[int, list[int]] = {topic.id: [] for topic in topics}
+    topic_points: dict[int, list[tuple[float, float]]] = {topic.id: [] for topic in topics}
     for index, answer in enumerate(payload.answers):
         question_topic = topics_by_name.get(str(questions[index].get("topic", ""))) if topics else None
         selected_topic = question_topic or (topics[index % len(topics)] if topics else None)
+        correct = answer == questions[index]["correct_index"]
         if selected_topic:
-            topic_scores[selected_topic.id].append(100 if answer == questions[index]["correct_index"] else 0)
-    for index, topic in enumerate(topics):
-        scores = topic_scores[topic.id]
-        topic_score = round(sum(scores) / len(scores)) if scores else None
-        progress = db.scalars(select(StudentTopicProgress).where(StudentTopicProgress.enrollment_id == enrollment.id, StudentTopicProgress.topic_id == topic.id)).first()
-        if progress is None:
-            progress = StudentTopicProgress(user_id=user.id, enrollment_id=enrollment.id, topic_id=topic.id)
-        progress.score = topic_score
-        progress.status = "completed" if topic_score is not None and topic_score >= 70 else ("in_progress" if index == 0 or topic_score is not None else "upcoming")
-        if progress.status == "completed":
-            progress.completed_at = progress.completed_at or datetime.utcnow()
-        db.add(progress)
+            topic_points[selected_topic.id].append((1.0 if correct else 0.0, 1.0))
+            db.add(
+                AssessmentAnswer(
+                    attempt_id=attempt.id,
+                    question_index=index,
+                    topic_id=selected_topic.id,
+                    selected_index=answer,
+                    is_correct=correct,
+                    earned_points=1.0 if correct else 0.0,
+                )
+            )
+    for topic in topics:
+        points = topic_points[topic.id]
+        topic_score = (sum(earned for earned, _ in points) / sum(available for _, available in points) * 100.0) if points else None
+        upsert_topic_mastery(db, user_id=user.id, enrollment_id=enrollment.id, topic_id=topic.id, score=topic_score)
     db.commit()
 
     return ScoreResponse(score=score, total=len(questions))

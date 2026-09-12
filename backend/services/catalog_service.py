@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from typing import Any
-from backend.resources import TOPIC_CATALOG, normalize_topic
+try:
+    from backend.resources import TOPIC_CATALOG, normalize_topic
+except ImportError:
+    from resources import TOPIC_CATALOG, normalize_topic
 
 
 def filter_options(items: list[Any], query: str) -> list[Any]:

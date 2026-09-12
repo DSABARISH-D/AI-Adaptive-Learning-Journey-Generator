@@ -89,7 +89,7 @@ export function PracticeCodingPage() {
         setCurrentLevel(levelParam || 3)
 
         try {
-          const profile = await apiFetch<any>('/profile')
+          const profile = await apiFetch<{ currentCourse?: string }>('/profile')
           if (!searchParams.get('course') && profile.currentCourse) {
             code = profile.currentCourse
           }
@@ -99,7 +99,11 @@ export function PracticeCodingPage() {
 
         setCourseCode(code)
 
-        const data = await apiFetch<any>(
+        const data = await apiFetch<{
+          questions?: Question[]
+          courseTitle?: string
+          topic?: string
+        }>(
           `/courses/${code}/practice?level=${levelParam || 3}&topic=${encodeURIComponent(searchParams.get('topic') || '')}`
         )
 
@@ -195,7 +199,7 @@ export function PracticeCodingPage() {
     setRunningCustom(true)
     setCustomOutput('Running...')
     try {
-      const res = await apiFetch<any>('/practice/run', {
+      const res = await apiFetch<{ output?: string }>('/practice/run', {
         method: 'POST',
         body: JSON.stringify({
           code: currentCode,
@@ -204,8 +208,9 @@ export function PracticeCodingPage() {
         }),
       })
       setCustomOutput(res.output || '(no output produced)')
-    } catch (err: any) {
-      setCustomOutput(`Error running code: ${err.message || String(err)}`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setCustomOutput(`Error running code: ${msg}`)
     } finally {
       setRunningCustom(false)
     }
@@ -243,7 +248,7 @@ export function PracticeCodingPage() {
         // Call Gemini AI to generate the NEXT QUESTION!
         setGeneratingNext(true)
         try {
-          const nextRes = await apiFetch<any>('/practice/next-question', {
+          const nextRes = await apiFetch<{ ok: boolean; question: Question }>('/practice/next-question', {
             method: 'POST',
             body: JSON.stringify({
               course: courseCode,
@@ -277,8 +282,9 @@ export function PracticeCodingPage() {
           setGeneratingNext(false)
         }
       }
-    } catch (err: any) {
-      alert('Failed to evaluate code with Gemini AI: ' + (err.message || String(err)))
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      alert('Failed to evaluate code with Gemini AI: ' + msg)
     } finally {
       setSubmitting(false)
     }

@@ -142,7 +142,7 @@ export interface LearningJourneyPayload {
     weakConcept: string
     buttonText: string
   }
-  user: any
+  user: { id?: number; email?: string; [key: string]: unknown }
 }
 
 export interface VideoResource {
@@ -181,6 +181,6 @@ export interface LearningResourcesPayload {
   quickNotes: QuickNotes
   additionalDocs: DocumentationResource[]
   tutorTip: string
-  user: any
+  user: { id?: number; email?: string; [key: string]: unknown }
 }
 

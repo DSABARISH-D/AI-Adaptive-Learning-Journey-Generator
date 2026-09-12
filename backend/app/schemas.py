@@ -51,6 +51,7 @@ class AuthTokenResponse(BaseModel):
 
 class CourseTopicOut(BaseModel):
     id: int
+    code: str
     title: str
     description: str | None = None
     order: int

@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom'
 import { apiFetch } from '../api/client'
 import type { LearningResourcesPayload } from '../types'
 import '../styles/App.css'
+
+type ResourceTab = 'all' | 'videos' | 'notes' | 'docs' | 'articles' | 'practice' | 'playlists'
+type ResourceLanguage = 'All' | 'English' | 'Tamil'
 
 export function ResourcesPage() {
   const { code } = useParams<{ code?: string }>()
@@ -12,11 +15,11 @@ export function ResourcesPage() {
   const [data, setData] = useState<LearningResourcesPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'all' | 'videos' | 'notes' | 'docs' | 'articles' | 'practice' | 'playlists'>('videos')
-  const [selectedLanguage, setSelectedLanguage] = useState<'All' | 'English' | 'Tamil'>('All')
+  const [activeTab, setActiveTab] = useState<ResourceTab>('videos')
+  const [selectedLanguage, setSelectedLanguage] = useState<ResourceLanguage>('All')
   const [sortBy, setSortBy] = useState('Recommended')
 
-  const fetchResources = async () => {
+  const fetchResources = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -32,7 +35,7 @@ export function ResourcesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [code, searchParams, selectedLanguage])
 
   useEffect(() => {
     fetchResources()
@@ -42,7 +45,7 @@ export function ResourcesPage() {
     }
     window.addEventListener('course-switched', handleCourseSwitch)
     return () => window.removeEventListener('course-switched', handleCourseSwitch)
-  }, [code, searchParams, selectedLanguage])
+  }, [fetchResources])
 
   const downloadNotesPDF = () => {
     if (!data) return
@@ -165,7 +168,7 @@ export function ResourcesPage() {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as ResourceTab)}
               className={`tab-btn ${activeTab === tab.id ? 'is-active' : ''}`}
               type="button"
             >
@@ -181,7 +184,7 @@ export function ResourcesPage() {
             <span className="dropdown-label">Language:</span>
             <select
               value={selectedLanguage}
-              onChange={(e) => setSelectedLanguage(e.target.value as any)}
+              onChange={(e) => setSelectedLanguage(e.target.value as ResourceLanguage)}
               className="dropdown-select"
             >
               <option value="All">All</option>

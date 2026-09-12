@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import os
-import pandas as pd
-from backend.resources import TOPIC_CATALOG, normalize_topic
+try:
+    from backend.resources import TOPIC_CATALOG, normalize_topic
+except ImportError:
+    from resources import TOPIC_CATALOG, normalize_topic
 
 
 @dataclass
@@ -15,14 +17,18 @@ class TutorReply:
     related_resources: list[dict] = field(default_factory=list)
 
 
-def load_dataset_registry() -> pd.DataFrame:
+def load_dataset_registry() -> list[dict] | Any:
     records = [
         {"dataset": "OULAD Learning Analytics", "rows": 32593, "type": "Student VLE interactions, assessments, demographics", "source": "Open University"},
         {"dataset": "UCI Student Performance", "rows": 1044, "type": "Secondary school academic outcomes and habits", "source": "UCI Machine Learning Repository"},
         {"dataset": "UCI Heart Disease", "rows": 303, "type": "Clinical diagnosis features for Naive Bayes", "source": "Cleveland Clinic"},
         {"dataset": "EdNet Higher Ed Tutoring", "rows": 1314415, "type": "Student problem-solving logs & knowledge tracing", "source": "Santa AI Research"},
     ]
-    return pd.DataFrame(records)
+    try:
+        import pandas as pd
+        return pd.DataFrame(records)
+    except ImportError:
+        return records
 
 
 def _detect_topic_from_question(question: str, topics: list[str]) -> str:

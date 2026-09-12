@@ -82,12 +82,40 @@ export function AssessmentsPage() {
   return <div className="space-y-6"><PageHeading eyebrow="Measure your skills" title="Assessments" description="Baseline and topic assessments help tailor your learning path." /><div className="grid gap-5 md:grid-cols-2">{loading ? <p>Loading assessments...</p> : courses.map((course) => <article key={course.id} className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Baseline assessment</p><h2 className="mt-2 text-xl font-bold">{course.title}</h2></div><span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Not started</span></div><p className="mt-3 text-sm text-gray-500">5 questions · 10 minutes · Personalized difficulty</p><button onClick={() => navigate(`/courses/${course.code}/baseline`)} className="mt-6 w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700">Start assessment</button></article>)}</div></div>
 }
 
+interface ResourceItem {
+  topic: string
+  level?: string
+  videos?: Array<{ title: string; channel?: string; url: string }>
+  courses?: Array<{ title: string; provider?: string; url: string }>
+  project?: string
+}
+
+interface ModelScoreItem {
+  model: string
+  accuracy: number
+  f1_score: number
+  status: string
+}
+
+interface ProgressContext {
+  learningScore?: number
+  pathMetrics?: {
+    topic_completion_pct?: number
+    quiz_pct?: number
+    [key: string]: unknown
+  }
+  modelScores?: ModelScoreItem[]
+  resources?: ResourceItem[]
+  modelName?: string
+  automlEngine?: string
+}
+
 export function ResourcesPage() {
   const [loading, setLoading] = useState(true)
-  const [resources, setResources] = useState<any[]>([])
+  const [resources, setResources] = useState<ResourceItem[]>([])
 
   useEffect(() => {
-    apiFetch<any>('/context')
+    apiFetch<ProgressContext>('/context')
       .then((data) => {
         if (data && data.resources && data.resources.length > 0) {
           setResources(data.resources)
@@ -111,7 +139,7 @@ export function ResourcesPage() {
         <p className="text-gray-500">Loading learning resources...</p>
       ) : resources.length > 0 ? (
         <div className="space-y-8">
-          {resources.map((item: any) => (
+          {resources.map((item: ResourceItem) => (
             <section key={item.topic} className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
                 <h2 className="text-xl font-bold capitalize text-gray-900">{item.topic}</h2>
@@ -125,7 +153,7 @@ export function ResourcesPage() {
                 <div className="mb-4">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-2">Recommended Video Tutorials</h3>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {item.videos.map((vid: any, i: number) => (
+                    {item.videos.map((vid, i: number) => (
                       <a
                         key={i}
                         href={vid.url}
@@ -149,7 +177,7 @@ export function ResourcesPage() {
                 <div className="mb-4">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-2">Verified Courses & Certifications</h3>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {item.courses.map((crs: any, i: number) => (
+                    {item.courses.map((crs, i: number) => (
                       <a
                         key={i}
                         href={crs.url}
@@ -191,11 +219,11 @@ export function ResourcesPage() {
 }
 
 export function ProgressPage() {
-  const [context, setContext] = useState<any>(null)
+  const [context, setContext] = useState<ProgressContext | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    apiFetch<any>('/context')
+    apiFetch<ProgressContext>('/context')
       .then(setContext)
       .catch(() => setContext(null))
       .finally(() => setLoading(false))
@@ -257,7 +285,7 @@ export function ProgressPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {modelScores.map((m: any, idx: number) => (
+                    {modelScores.map((m: ModelScoreItem, idx: number) => (
                       <tr key={idx} className="hover:bg-gray-50/50">
                         <td className="py-3 font-semibold text-gray-700">#{idx + 1}</td>
                         <td className="py-3 font-bold text-gray-900 flex items-center gap-2">
@@ -293,6 +321,15 @@ interface ChatMessage {
   resources?: Array<{ title: string; url: string; type: string }>
 }
 
+interface TutorResponse {
+  ok?: boolean
+  answer?: string
+  topic?: string
+  mode?: string
+  retrieved?: string[]
+  related_resources?: Array<{ title: string; url: string; type: string }>
+}
+
 export function TutorPage() {
   const { user } = useAuth()
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -320,17 +357,17 @@ export function TutorPage() {
     setLoading(true)
 
     try {
-      const resp = await apiFetch<any>('/tutor', {
+      const resp = await apiFetch<TutorResponse>('/tutor', {
         method: 'POST',
         body: JSON.stringify({ question: text }),
       })
 
-      if (resp && resp.ok) {
+      if (resp && resp.ok && resp.answer) {
         setMessages((prev) => [
           ...prev,
           {
             role: 'assistant',
-            text: resp.answer,
+            text: resp.answer || '',
             topic: resp.topic,
             mode: resp.mode,
             retrieved: resp.retrieved,
@@ -346,7 +383,7 @@ export function TutorPage() {
           },
         ])
       }
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {

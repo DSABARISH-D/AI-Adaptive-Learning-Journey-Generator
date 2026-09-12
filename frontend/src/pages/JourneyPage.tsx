@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiFetch } from '../api/client'
-import type { LearningJourneyPayload } from '../types'
+import type { LearningJourneyPayload, RoadmapTopic } from '../types'
 import '../styles/App.css'
 
 export function JourneyPage() {
@@ -11,7 +11,7 @@ export function JourneyPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchJourney = async (courseCode?: string) => {
+  const fetchJourney = useCallback(async (courseCode?: string) => {
     setLoading(true)
     setError(null)
     try {
@@ -23,21 +23,22 @@ export function JourneyPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [code])
 
   useEffect(() => {
     fetchJourney(code)
 
     // Listen to course-switched event from TopNav
-    const handleCourseSwitch = (e: any) => {
-      const newCode = e.detail?.course_code
+    const handleCourseSwitch = (e: Event) => {
+      const custom = e as CustomEvent<{ course_code?: string }>
+      const newCode = custom.detail?.course_code
       if (newCode) {
         fetchJourney(newCode)
       }
     }
     window.addEventListener('course-switched', handleCourseSwitch)
     return () => window.removeEventListener('course-switched', handleCourseSwitch)
-  }, [code])
+  }, [code, fetchJourney])
 
   if (loading) {
     return (
@@ -149,7 +150,7 @@ export function JourneyPage() {
     return '#e5e7eb'                 // Gray
   }
 
-  const handleStepAction = (topic: any) => {
+  const handleStepAction = (topic: RoadmapTopic) => {
     if (topic.defaultStatus === 'locked') return
     // Navigate to practice coding for this topic
     navigate(`/practice?topic=${encodeURIComponent(topic.title)}`)
