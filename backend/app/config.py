@@ -6,19 +6,19 @@ import logging
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
     app_name: str = "AI Adaptive Learning Journey Generator"
+    app_env: str = "development"
     database_url: str = "sqlite:///./ai_adaptive_learning.db"
 
-    # Auth
+    # Auth: the development default is deliberately rejected in production.
     jwt_secret: str = "dev-secret"
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
@@ -29,88 +29,63 @@ class Settings(BaseSettings):
     llm_provider: str = "openai"
     openai_api_key: str = ""
     gemini_api_key: str = ""
+    youtube_api_key: str = ""
+    enable_unsafe_code_runner: bool = True
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     bedrock_model_id: str = ""
     mastery_threshold: float = 70.0
 
-    model_config = SettingsConfigDict(
-        env_file=REPOSITORY_ROOT / ".env",
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(env_file=REPOSITORY_ROOT / ".env", extra="ignore")
 
     @field_validator(
-        "google_oauth_client_id",
-        "google_oauth_client_secret",
-        "oauth_redirect_url",
-        "frontend_url",
-        mode="before",
+        "google_oauth_client_id", "google_oauth_client_secret",
+        "oauth_redirect_url", "frontend_url", mode="before",
     )
     @classmethod
     def normalize_oauth_values(cls, value: object) -> str:
-        """Trim whitespace and accidental wrapping quotes from dotenv values."""
         normalized = "" if value is None else str(value).strip()
-        if (
-            len(normalized) >= 2
-            and normalized[0] in {"'", '"'}
-            and normalized[-1] == normalized[0]
-        ):
+        if len(normalized) >= 2 and normalized[0] in {"'", '"'} and normalized[-1] == normalized[0]:
             normalized = normalized[1:-1].strip()
         return normalized
 
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        if self.app_env.strip().lower() == "production":
+            if not self.jwt_secret or self.jwt_secret == "dev-secret" or len(self.jwt_secret) < 32:
+                raise ValueError("Production requires a unique JWT_SECRET of at least 32 characters.")
+            if self.enable_unsafe_code_runner:
+                raise ValueError(
+                    "ENABLE_UNSAFE_CODE_RUNNER must be false in production. "
+                    "Use a separately isolated code-execution worker before enabling code execution."
+                )
+        return self
+
 
 def validate_google_oauth_settings(config: Settings) -> None:
-    """Fail startup before an invalid OAuth client reaches Google."""
     missing = [
-        name
-        for name, value in (
+        name for name, value in (
             ("GOOGLE_OAUTH_CLIENT_ID", config.google_oauth_client_id),
             ("GOOGLE_OAUTH_CLIENT_SECRET", config.google_oauth_client_secret),
-        )
-        if not value
+        ) if not value
     ]
     if missing:
-        names = " and ".join(missing)
         raise RuntimeError(
-            "Google OAuth configuration error: "
-            f"{names} must be set and non-empty. "
-            "Add both values to the repository-root .env file before starting the backend."
+            "Google OAuth configuration error: " + " and ".join(missing)
+            + " must be set before enabling Google login."
         )
-
-    quoted = [
-        name
-        for name, value in (
-            ("GOOGLE_OAUTH_CLIENT_ID", config.google_oauth_client_id),
-            ("GOOGLE_OAUTH_CLIENT_SECRET", config.google_oauth_client_secret),
-        )
-        if value.startswith(("'", '"')) or value.endswith(("'", '"'))
-    ]
-    if quoted:
-        raise RuntimeError(
-            "Google OAuth configuration error: "
-            f"{' and '.join(quoted)} contain an unmatched quote character."
-        )
-
     redirect_uri = urlparse(config.oauth_redirect_url)
     if redirect_uri.scheme not in {"http", "https"} or not redirect_uri.netloc:
-        raise RuntimeError(
-            "Google OAuth configuration error: OAUTH_REDIRECT_URL must be an absolute "
-            "HTTP(S) URL, for example http://localhost:8000/api/auth/google/callback."
-        )
+        raise RuntimeError("OAUTH_REDIRECT_URL must be an absolute HTTP(S) URL.")
 
 
 def load_settings(**settings_kwargs: object) -> Settings:
-    """Load, validate, and report non-sensitive OAuth startup configuration."""
     config = Settings(**settings_kwargs)
     try:
         validate_google_oauth_settings(config)
-        logger.info("Google OAuth redirect URI: %s", config.oauth_redirect_url)
+        logger.info("Google OAuth redirect URI configured.")
     except RuntimeError as exc:
-        logger.warning(
-            "Google OAuth not fully configured — Google login will be unavailable. "
-            "Use the /api/auth/dev-login endpoint for local testing. Detail: %s",
-            exc,
-        )
+        logger.warning("Google OAuth is not configured; Google login will be unavailable. %s", exc)
     return config
 
 

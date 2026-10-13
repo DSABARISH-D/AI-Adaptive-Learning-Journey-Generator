@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.config import settings
 from services.ai_practice_service import (
     evaluate_code_with_gemini,
     generate_next_question_with_gemini,
@@ -38,16 +39,22 @@ class NextQuestionRequest(BaseModel):
     completedQuestions: list[dict[str, Any]] = Field(default_factory=list)
 
 
+def require_code_runner_enabled() -> None:
+    """Prevent in-process untrusted code execution in production."""
+    if not settings.enable_unsafe_code_runner or settings.app_env.strip().lower() == "production":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Code execution is temporarily unavailable while a secure isolated runner is configured.",
+        )
+
+
 @router.get("/courses/{course_code}/practice")
 def list_practice_questions(course_code: str, level: int = 3, topic: str = "") -> dict[str, Any]:
-    """Return the local starter problem bank for a course and level."""
     if level not in (1, 2, 3):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Level must be 1, 2, or 3")
-
     questions = get_practice_questions(course_code, level)
     if not questions:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No practice questions found")
-
     selected_topic = topic.strip() or questions[0].get("topic", "Coding Challenges")
     return {
         "course": course_code.lower(),
@@ -60,23 +67,21 @@ def list_practice_questions(course_code: str, level: int = 3, topic: str = "") -
 
 @router.post("/practice/run")
 def run_practice_code(request: PracticeRunRequest) -> dict[str, Any]:
-    """Run a custom test case through the practice service."""
+    """Run code only in explicitly enabled local development mode."""
+    require_code_runner_enabled()
     return run_custom_testcase(request.code, request.language, request.input)
 
 
 @router.post("/practice/submit")
 def submit_practice_code(request: PracticeSubmission) -> dict[str, Any]:
-    """Evaluate a submission against the selected question's test cases."""
+    """Evaluate code only in explicitly enabled local development mode."""
+    require_code_runner_enabled()
     return evaluate_code_with_gemini(request.code, request.language, request.question)
 
 
 @router.post("/practice/next-question")
 def next_practice_question(request: NextQuestionRequest) -> dict[str, Any]:
-    """Generate the next question after a successful submission."""
     question = generate_next_question_with_gemini(
-        request.course,
-        request.level,
-        request.topic,
-        request.completedQuestions,
+        request.course, request.level, request.topic, request.completedQuestions,
     )
     return {"ok": True, "question": question}
