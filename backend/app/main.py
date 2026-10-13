@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import Base, engine
@@ -22,11 +22,16 @@ from app.routers.resources import router as resources_router
 from app.routers.tutor import router as tutor_router
 from app.seed import seed_courses
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    """Create tables and seed data on startup."""
-    Base.metadata.create_all(bind=engine)
+    """Create local development tables and seed course data."""
+    # TODO(production): use Alembic migrations as a deployment step rather than
+    # creating schema automatically during application startup.
+    if settings.app_env.strip().lower() != "production":
+        Base.metadata.create_all(bind=engine)
     seed_courses()
     yield
 
@@ -36,9 +41,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ---------------------------------------------------------------------------
-# CORS Middleware
-# ---------------------------------------------------------------------------
 allowed_origins = [
     origin.strip()
     for origin in settings.cors_origins.split(",")
@@ -49,26 +51,26 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
-# ---------------------------------------------------------------------------
-# Global exception handler — consistent error shape
-# ---------------------------------------------------------------------------
 @app.exception_handler(Exception)
 async def generic_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
-    """Catch-all so unhandled errors never leak raw tracebacks to the client."""
+    """Log server-side details but never return exception text to a client."""
+    logger.exception("Unhandled application error", exc_info=exc)
     return JSONResponse(
         status_code=500,
-        content={"error": {"code": "INTERNAL_ERROR", "message": str(exc)}},
+        content={
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected server error occurred.",
+            }
+        },
     )
 
 
-# ---------------------------------------------------------------------------
-# Routers
-# ---------------------------------------------------------------------------
 app.include_router(auth_router)
 app.include_router(profile_router)
 app.include_router(courses_router)
@@ -80,9 +82,6 @@ app.include_router(resources_router)
 app.include_router(tutor_router)
 
 
-# ---------------------------------------------------------------------------
-# Health
-# ---------------------------------------------------------------------------
 @app.get("/api/health")
 def health_check() -> dict[str, str]:
     """Liveness probe."""
